@@ -723,6 +723,16 @@
                     </div>
 
                     <button class="btn btn-primary" id="startGameBtn" onclick="startGame()" disabled>Start Game</button>
+                    
+                    <!-- Debug info -->
+                    <div id="debugInfo" style="margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: 10px; font-size: 0.9rem; color: var(--text-secondary); display: none;">
+                        <strong>Debug Info:</strong><br>
+                        Invited players: <span id="debugInvitedCount">0</span><br>
+                        Accepted: <span id="debugAcceptedCount">0</span><br>
+                        Can start: <span id="debugCanStart">false</span><br>
+                        <button class="btn btn-secondary btn-small" onclick="toggleDebug()" style="margin-top: 10px;">Hide Debug</button>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="toggleDebug()" style="margin-top: 10px;">Show Debug Info</button>
                 </div>
             </div>
         </div>
@@ -809,6 +819,7 @@
         window.myCards = [];
         window.gameState = null;
         window.currentInvitation = null;
+        window.invitationListeners = {};
 
         // Card utilities
         const suits = ['♠', '♣', '♥', '♦'];
@@ -930,6 +941,12 @@
             if (window.invitedPlayers.has(playerId)) {
                 window.invitedPlayers.delete(playerId);
                 await remove(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
+                
+                // Stop monitoring this player
+                if (window.invitationListeners && window.invitationListeners[playerId]) {
+                    window.invitationListeners[playerId](); // Unsubscribe
+                    delete window.invitationListeners[playerId];
+                }
             } else {
                 window.invitedPlayers.add(playerId);
                 await set(ref(database, `invitations/${playerId}/${window.currentUser.id}`), {
@@ -938,6 +955,20 @@
                     timestamp: Date.now(),
                     status: 'pending'
                 });
+                
+                // Start monitoring this specific invitation for changes
+                if (!window.invitationListeners) {
+                    window.invitationListeners = {};
+                }
+                
+                const invitationRef = ref(database, `invitations/${playerId}/${window.currentUser.id}`);
+                const unsubscribe = onValue(invitationRef, (snapshot) => {
+                    const invitation = snapshot.val();
+                    console.log(`Invitation status changed for ${playerId}:`, invitation?.status);
+                    updateInvitedPlayersUI();
+                });
+                
+                window.invitationListeners[playerId] = unsubscribe;
             }
 
             updateInvitedPlayersUI();
@@ -947,6 +978,11 @@
         // Update invited players UI
         window.updateInvitedPlayersUI = async function() {
             const container = document.getElementById('invitedPlayers');
+            if (!container) {
+                console.error('invitedPlayers container not found');
+                return;
+            }
+            
             container.innerHTML = '';
 
             // Add yourself
@@ -973,6 +1009,8 @@
                     const isAccepted = invitation?.status === 'accepted';
                     if (isAccepted) acceptedCount++;
                     
+                    console.log(`Player ${playerData.nickname}: ${isAccepted ? 'ACCEPTED' : 'PENDING'}`);
+                    
                     const card = document.createElement('div');
                     card.className = 'invited-player-card ' + (isAccepted ? 'accepted' : 'pending');
                     card.innerHTML = `
@@ -986,11 +1024,33 @@
             // Total players = host (1) + accepted invitations
             const totalPlayers = 1 + acceptedCount;
             
+            console.log(`Total players: ${totalPlayers}, Accepted: ${acceptedCount}`);
+            
             // Can start with 2-4 players total (so 1-3 accepted invitations)
             const canStart = totalPlayers >= 2 && totalPlayers <= 4;
             
-            document.getElementById('startGameBtn').disabled = !canStart;
-            document.getElementById('gameModeSelector').style.display = canStart ? 'block' : 'none';
+            console.log(`Can start: ${canStart}`);
+            
+            const startBtn = document.getElementById('startGameBtn');
+            const modeSelector = document.getElementById('gameModeSelector');
+            
+            if (startBtn) {
+                startBtn.disabled = !canStart;
+                console.log(`Start button disabled: ${startBtn.disabled}`);
+            }
+            
+            if (modeSelector) {
+                modeSelector.style.display = canStart ? 'block' : 'none';
+            }
+            
+            // Update debug info
+            const debugInvitedCount = document.getElementById('debugInvitedCount');
+            const debugAcceptedCount = document.getElementById('debugAcceptedCount');
+            const debugCanStart = document.getElementById('debugCanStart');
+            
+            if (debugInvitedCount) debugInvitedCount.textContent = window.invitedPlayers.size;
+            if (debugAcceptedCount) debugAcceptedCount.textContent = acceptedCount;
+            if (debugCanStart) debugCanStart.textContent = canStart;
         };
 
         // Listen for invitations
@@ -1016,13 +1076,6 @@
                     }
                 });
             });
-
-            // Monitor invitation responses for host
-            setInterval(async () => {
-                if (window.invitedPlayers.size > 0) {
-                    await updateInvitedPlayersUI();
-                }
-            }, 1000);
         };
 
         // Invitation modal
@@ -1480,6 +1533,13 @@
                 await remove(ref(database, `players/${window.currentUser.id}`));
                 window.currentUser = null;
             }
+            
+            // Clear all invitation listeners
+            if (window.invitationListeners) {
+                Object.values(window.invitationListeners).forEach(unsubscribe => unsubscribe());
+                window.invitationListeners = {};
+            }
+            
             window.invitedPlayers.clear();
             switchScreen('loginScreen');
         };
@@ -1498,6 +1558,15 @@
             setTimeout(() => {
                 notification.remove();
             }, 3000);
+        };
+
+        window.toggleDebug = function() {
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo.style.display === 'none') {
+                debugInfo.style.display = 'block';
+            } else {
+                debugInfo.style.display = 'none';
+            }
         };
     </script>
 </body>
