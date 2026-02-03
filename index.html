@@ -157,7 +157,7 @@
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(220, 20, 60, 0.4);
         }
@@ -175,6 +175,13 @@
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            border-radius: 5px;
+            width: auto;
         }
 
         /* Lobby Screen */
@@ -277,12 +284,6 @@
         .player-name {
             font-size: 1.1rem;
             font-weight: 600;
-        }
-
-        .btn-small {
-            padding: 8px 15px;
-            font-size: 0.9rem;
-            border-radius: 5px;
         }
 
         .lobby-main {
@@ -532,6 +533,11 @@
             border-color: var(--accent-red);
         }
 
+        .player-status-card.winner {
+            border-color: var(--success);
+            background: rgba(40, 167, 69, 0.1);
+        }
+
         .turn-indicator {
             font-size: 0.9rem;
             color: var(--accent-gold);
@@ -586,17 +592,42 @@
             border: 2px solid var(--accent-gold);
             text-align: center;
             max-width: 500px;
+            min-width: 400px;
         }
 
         .modal-content h2 {
             color: var(--accent-gold);
             margin-bottom: 20px;
+            font-size: 2.5rem;
+        }
+
+        .modal-content p {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
         }
 
         .modal-buttons {
             display: flex;
             gap: 15px;
             margin-top: 30px;
+        }
+
+        .game-over-modal .modal-content {
+            min-width: 500px;
+        }
+
+        .game-result {
+            font-size: 3rem;
+            margin: 30px 0;
+            font-family: 'Bebas Neue', sans-serif;
+        }
+
+        .game-result.win {
+            color: var(--success);
+        }
+
+        .game-result.lose {
+            color: var(--accent-red);
         }
 
         /* Responsive */
@@ -630,6 +661,11 @@
             .mode-options {
                 flex-direction: column;
             }
+
+            .modal-content {
+                min-width: 90%;
+                max-width: 90%;
+            }
         }
 
         .error-message {
@@ -649,6 +685,24 @@
         ::-webkit-scrollbar-thumb {
             background: var(--accent-gold);
             border-radius: 4px;
+        }
+
+        .rematch-votes {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-card);
+            border-radius: 10px;
+        }
+
+        .rematch-vote-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rematch-vote-item:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
@@ -701,7 +755,7 @@
                 <div class="lobby-main">
                     <div class="room-info">
                         <h2>Game Room</h2>
-                        <p>Invite 1-3 players to start a game</p>
+                        <p>Invite 1-3 players to start a game (2-4 players total)</p>
                     </div>
 
                     <div class="invited-players" id="invitedPlayers">
@@ -713,26 +767,16 @@
                         <div class="mode-options">
                             <div class="mode-option selected" onclick="selectMode('normal')">
                                 <h4>Normal</h4>
-                                <p>Classic Durak rules</p>
+                                <p>Classic Durak - defend or take cards</p>
                             </div>
                             <div class="mode-option" onclick="selectMode('perevodnoj')">
                                 <h4>Переводной</h4>
-                                <p>Transfer attack mode</p>
+                                <p>Transfer attack with same value card</p>
                             </div>
                         </div>
                     </div>
 
                     <button class="btn btn-primary" id="startGameBtn" onclick="startGame()" disabled>Start Game</button>
-                    
-                    <!-- Debug info -->
-                    <div id="debugInfo" style="margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: 10px; font-size: 0.9rem; color: var(--text-secondary); display: none;">
-                        <strong>Debug Info:</strong><br>
-                        Invited players: <span id="debugInvitedCount">0</span><br>
-                        Accepted: <span id="debugAcceptedCount">0</span><br>
-                        Can start: <span id="debugCanStart">false</span><br>
-                        <button class="btn btn-secondary btn-small" onclick="toggleDebug()" style="margin-top: 10px;">Hide Debug</button>
-                    </div>
-                    <button class="btn btn-secondary btn-small" onclick="toggleDebug()" style="margin-top: 10px;">Show Debug Info</button>
                 </div>
             </div>
         </div>
@@ -791,6 +835,37 @@
         </div>
     </div>
 
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="modal game-over-modal">
+        <div class="modal-content">
+            <h2 id="gameOverTitle">Game Over</h2>
+            <div class="game-result" id="gameResult"></div>
+            <p id="gameOverMessage"></p>
+            <div id="rematchSection" style="display: none;">
+                <div class="modal-buttons">
+                    <button class="btn btn-primary" onclick="requestRematch()">Request Rematch</button>
+                    <button class="btn btn-secondary" onclick="declineRematch()">Return to Lobby</button>
+                </div>
+                <div class="rematch-votes" id="rematchVotes" style="display: none;">
+                    <h4>Rematch Votes:</h4>
+                    <div id="rematchVotesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rematch Request Modal -->
+    <div id="rematchModal" class="modal">
+        <div class="modal-content">
+            <h2>Rematch Request</h2>
+            <p id="rematchText"></p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="acceptRematch()">Accept</button>
+                <button class="btn btn-secondary" onclick="declineRematchRequest()">Decline</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -815,11 +890,11 @@
         window.invitedPlayers = new Set();
         window.selectedMode = 'normal';
         window.currentGameId = null;
-        window.selectedCards = [];
         window.myCards = [];
         window.gameState = null;
         window.currentInvitation = null;
-        window.invitationListeners = {};
+        window.rematchRequested = false;
+        window.rematchVotes = {};
 
         // Card utilities
         const suits = ['♠', '♣', '♥', '♦'];
@@ -939,15 +1014,11 @@
             }
 
             if (window.invitedPlayers.has(playerId)) {
+                // Uninvite
                 window.invitedPlayers.delete(playerId);
                 await remove(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
-                
-                // Stop monitoring this player
-                if (window.invitationListeners && window.invitationListeners[playerId]) {
-                    window.invitationListeners[playerId](); // Unsubscribe
-                    delete window.invitationListeners[playerId];
-                }
             } else {
+                // Invite
                 window.invitedPlayers.add(playerId);
                 await set(ref(database, `invitations/${playerId}/${window.currentUser.id}`), {
                     from: window.currentUser.nickname,
@@ -955,37 +1026,20 @@
                     timestamp: Date.now(),
                     status: 'pending'
                 });
-                
-                // Start monitoring this specific invitation for changes
-                if (!window.invitationListeners) {
-                    window.invitationListeners = {};
-                }
-                
-                const invitationRef = ref(database, `invitations/${playerId}/${window.currentUser.id}`);
-                const unsubscribe = onValue(invitationRef, (snapshot) => {
-                    const invitation = snapshot.val();
-                    console.log(`Invitation status changed for ${playerId}:`, invitation?.status);
-                    updateInvitedPlayersUI();
-                });
-                
-                window.invitationListeners[playerId] = unsubscribe;
             }
 
             updateInvitedPlayersUI();
             loadPlayers();
         };
 
-        // Update invited players UI
+        // Update invited players UI - FIXED VERSION
         window.updateInvitedPlayersUI = async function() {
             const container = document.getElementById('invitedPlayers');
-            if (!container) {
-                console.error('invitedPlayers container not found');
-                return;
-            }
+            if (!container) return;
             
             container.innerHTML = '';
 
-            // Add yourself
+            // Add yourself (host)
             const yourCard = document.createElement('div');
             yourCard.className = 'invited-player-card accepted';
             yourCard.innerHTML = `
@@ -994,67 +1048,69 @@
             `;
             container.appendChild(yourCard);
 
-            // Get player data
+            if (window.invitedPlayers.size === 0) {
+                // No invited players
+                document.getElementById('startGameBtn').disabled = true;
+                document.getElementById('gameModeSelector').style.display = 'none';
+                return;
+            }
+
+            // Get all player data and invitation statuses
             const playersSnapshot = await get(ref(database, 'players'));
             const playersData = playersSnapshot.val() || {};
 
             let acceptedCount = 0;
+            const invitedArray = Array.from(window.invitedPlayers);
 
-            for (let playerId of window.invitedPlayers) {
+            for (let playerId of invitedArray) {
                 const playerData = playersData[playerId];
-                if (playerData) {
-                    const invitationSnapshot = await get(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
-                    const invitation = invitationSnapshot.val();
-                    
-                    const isAccepted = invitation?.status === 'accepted';
-                    if (isAccepted) acceptedCount++;
-                    
-                    console.log(`Player ${playerData.nickname}: ${isAccepted ? 'ACCEPTED' : 'PENDING'}`);
-                    
-                    const card = document.createElement('div');
-                    card.className = 'invited-player-card ' + (isAccepted ? 'accepted' : 'pending');
-                    card.innerHTML = `
-                        <div class="player-card-name">${playerData.nickname}</div>
-                        <div class="player-card-status">${isAccepted ? '✓ Accepted' : '⏳ Pending'}</div>
-                    `;
-                    container.appendChild(card);
-                }
+                if (!playerData) continue;
+
+                // Check invitation status
+                const invitationSnapshot = await get(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
+                const invitation = invitationSnapshot.val();
+                
+                const isAccepted = invitation && invitation.status === 'accepted';
+                if (isAccepted) acceptedCount++;
+                
+                const card = document.createElement('div');
+                card.className = 'invited-player-card ' + (isAccepted ? 'accepted' : 'pending');
+                card.innerHTML = `
+                    <div class="player-card-name">${playerData.nickname}</div>
+                    <div class="player-card-status">${isAccepted ? '✓ Accepted' : '⏳ Pending'}</div>
+                `;
+                container.appendChild(card);
             }
 
-            // Total players = host (1) + accepted invitations
+            // Calculate total players (host + accepted invitations)
             const totalPlayers = 1 + acceptedCount;
             
-            console.log(`Total players: ${totalPlayers}, Accepted: ${acceptedCount}`);
-            
-            // Can start with 2-4 players total (so 1-3 accepted invitations)
+            // Can start with 2-4 players (so need 1-3 accepted)
             const canStart = totalPlayers >= 2 && totalPlayers <= 4;
             
-            console.log(`Can start: ${canStart}`);
-            
+            console.log('START BUTTON CHECK:', {
+                invitedCount: window.invitedPlayers.size,
+                acceptedCount: acceptedCount,
+                totalPlayers: totalPlayers,
+                canStart: canStart
+            });
+
+            // Update UI
             const startBtn = document.getElementById('startGameBtn');
             const modeSelector = document.getElementById('gameModeSelector');
             
             if (startBtn) {
                 startBtn.disabled = !canStart;
-                console.log(`Start button disabled: ${startBtn.disabled}`);
             }
             
             if (modeSelector) {
                 modeSelector.style.display = canStart ? 'block' : 'none';
             }
-            
-            // Update debug info
-            const debugInvitedCount = document.getElementById('debugInvitedCount');
-            const debugAcceptedCount = document.getElementById('debugAcceptedCount');
-            const debugCanStart = document.getElementById('debugCanStart');
-            
-            if (debugInvitedCount) debugInvitedCount.textContent = window.invitedPlayers.size;
-            if (debugAcceptedCount) debugAcceptedCount.textContent = acceptedCount;
-            if (debugCanStart) debugCanStart.textContent = canStart;
         };
 
-        // Listen for invitations
+        // Listen for invitations and set up monitoring
         window.listenForInvitations = function() {
+            // Listen for incoming invitations
             const invitationsRef = ref(database, `invitations/${window.currentUser.id}`);
             onValue(invitationsRef, (snapshot) => {
                 const invitations = snapshot.val() || {};
@@ -1076,6 +1132,19 @@
                     }
                 });
             });
+
+            // Monitor ALL invitations we sent out for status changes
+            setupInvitationMonitoring();
+        };
+
+        // Setup real-time monitoring of invitation statuses
+        window.setupInvitationMonitoring = function() {
+            // Check invitation statuses every 500ms
+            setInterval(async () => {
+                if (window.invitedPlayers.size > 0) {
+                    await updateInvitedPlayersUI();
+                }
+            }, 500);
         };
 
         // Invitation modal
@@ -1111,8 +1180,10 @@
             event.target.closest('.mode-option').classList.add('selected');
         };
 
-        // Start game
+        // Start game - FIXED VERSION
         window.startGame = async function() {
+            console.log('START GAME CLICKED');
+            
             // Get accepted players
             const playerIds = [window.currentUser.id];
             const playersSnapshot = await get(ref(database, 'players'));
@@ -1121,19 +1192,16 @@
             for (let playerId of window.invitedPlayers) {
                 const invitationSnapshot = await get(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
                 const invitation = invitationSnapshot.val();
-                if (invitation?.status === 'accepted') {
+                if (invitation && invitation.status === 'accepted') {
                     playerIds.push(playerId);
                 }
             }
 
-            // Check player count (2-4 players)
-            if (playerIds.length < 2) {
-                showNotification('Need at least 2 players to start!');
-                return;
-            }
+            console.log('Player IDs:', playerIds);
 
-            if (playerIds.length > 4) {
-                showNotification('Maximum 4 players allowed!');
+            // Validate player count
+            if (playerIds.length < 2 || playerIds.length > 4) {
+                showNotification(`Need 2-4 players to start! Currently: ${playerIds.length}`);
                 return;
             }
 
@@ -1167,7 +1235,8 @@
                 currentDefender: playerIds[1],
                 phase: 'attack',
                 createdAt: Date.now(),
-                playerNames: {}
+                playerNames: {},
+                finished: false
             };
 
             playerIds.forEach(id => {
@@ -1179,8 +1248,10 @@
             // Clear invitations
             for (let playerId of window.invitedPlayers) {
                 await remove(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
+                await remove(ref(database, `invitations/${window.currentUser.id}/${playerId}`));
             }
 
+            console.log('Game created:', gameId);
             joinGame(gameId);
         };
 
@@ -1194,12 +1265,261 @@
                 if (game) {
                     window.gameState = game;
                     updateGameUI(game);
+                    
+                    // Check for game over
+                    if (game.finished && !game.rematchStarted) {
+                        checkGameOver(game);
+                    }
                 } else {
                     // Game ended
                     switchScreen('lobbyScreen');
                     window.currentGameId = null;
                 }
             });
+        };
+
+        // Check game over
+        window.checkGameOver = function(game) {
+            const playersWithCards = game.players.filter(id => {
+                const hand = game.hands[id] || [];
+                return hand.length > 0;
+            });
+
+            if (playersWithCards.length === 0) {
+                // Everyone has 0 cards (shouldn't happen but handle it)
+                return;
+            }
+
+            if (playersWithCards.length === 1) {
+                // Game over - one loser remains
+                const loserId = playersWithCards[0];
+                const isLoser = loserId === window.currentUser.id;
+                
+                showGameOver(isLoser, game.playerNames[loserId], game.players);
+            }
+        };
+
+        // Show game over modal
+        window.showGameOver = function(isLoser, loserName, allPlayers) {
+            const modal = document.getElementById('gameOverModal');
+            const title = document.getElementById('gameOverTitle');
+            const result = document.getElementById('gameResult');
+            const message = document.getElementById('gameOverMessage');
+            const rematchSection = document.getElementById('rematchSection');
+
+            title.textContent = 'Game Over!';
+            
+            if (isLoser) {
+                result.textContent = 'YOU LOSE';
+                result.className = 'game-result lose';
+                message.textContent = `You are the Durak! Better luck next time.`;
+                rematchSection.style.display = 'block';
+            } else {
+                result.textContent = 'YOU WIN!';
+                result.className = 'game-result win';
+                message.textContent = `${loserName} is the Durak!`;
+                rematchSection.style.display = 'block';
+            }
+
+            modal.classList.add('active');
+        };
+
+        // Request rematch
+        window.requestRematch = async function() {
+            if (window.rematchRequested) return;
+            
+            window.rematchRequested = true;
+            
+            const game = window.gameState;
+            if (!game) return;
+
+            // Initialize rematch data
+            const rematchId = 'rematch_' + Date.now();
+            const rematchData = {
+                gameId: window.currentGameId,
+                requestedBy: window.currentUser.id,
+                requestedByName: window.currentUser.nickname,
+                players: game.players,
+                votes: {
+                    [window.currentUser.id]: true
+                },
+                timestamp: Date.now()
+            };
+
+            await set(ref(database, `rematches/${rematchId}`), rematchData);
+
+            // Listen for votes
+            const rematchRef = ref(database, `rematches/${rematchId}`);
+            onValue(rematchRef, async (snapshot) => {
+                const rematch = snapshot.val();
+                if (!rematch) return;
+
+                updateRematchVotes(rematch);
+
+                // Check if all voted
+                const allVoted = game.players.every(pid => rematch.votes[pid] !== undefined);
+                const allAccepted = game.players.every(pid => rematch.votes[pid] === true);
+
+                if (allVoted) {
+                    if (allAccepted) {
+                        // Start rematch!
+                        await startRematch(game);
+                    } else {
+                        // Someone declined
+                        showNotification('Rematch declined. Returning to lobby...');
+                        setTimeout(() => {
+                            leaveGame();
+                        }, 2000);
+                    }
+                    
+                    // Clean up
+                    await remove(ref(database, `rematches/${rematchId}`));
+                }
+            });
+
+            // Notify other players
+            for (let playerId of game.players) {
+                if (playerId !== window.currentUser.id) {
+                    await set(ref(database, `rematchRequests/${playerId}/${rematchId}`), {
+                        from: window.currentUser.nickname,
+                        fromId: window.currentUser.id,
+                        rematchId: rematchId
+                    });
+                }
+            }
+
+            document.getElementById('rematchVotes').style.display = 'block';
+            showNotification('Rematch requested! Waiting for other players...');
+        };
+
+        // Update rematch votes display
+        window.updateRematchVotes = function(rematch) {
+            const votesList = document.getElementById('rematchVotesList');
+            const game = window.gameState;
+            
+            votesList.innerHTML = '';
+            
+            game.players.forEach(pid => {
+                const vote = rematch.votes[pid];
+                const name = game.playerNames[pid];
+                
+                const voteItem = document.createElement('div');
+                voteItem.className = 'rematch-vote-item';
+                voteItem.innerHTML = `
+                    <span>${name}</span>
+                    <span>${vote === true ? '✓ Yes' : vote === false ? '✗ No' : '⏳ Waiting'}</span>
+                `;
+                votesList.appendChild(voteItem);
+            });
+        };
+
+        // Listen for rematch requests
+        window.listenForRematchRequests = function() {
+            const requestsRef = ref(database, `rematchRequests/${window.currentUser.id}`);
+            onValue(requestsRef, (snapshot) => {
+                const requests = snapshot.val() || {};
+                Object.entries(requests).forEach(([rematchId, data]) => {
+                    if (!window.rematchRequested) {
+                        showRematchRequestModal(data.from, data.fromId, rematchId);
+                    }
+                });
+            });
+        };
+
+        // Show rematch request modal
+        window.showRematchRequestModal = function(fromName, fromId, rematchId) {
+            window.currentRematchId = rematchId;
+            document.getElementById('rematchText').textContent = `${fromName} wants a rematch!`;
+            document.getElementById('rematchModal').classList.add('active');
+        };
+
+        // Accept rematch
+        window.acceptRematch = async function() {
+            const rematchId = window.currentRematchId;
+            await update(ref(database, `rematches/${rematchId}/votes`), {
+                [window.currentUser.id]: true
+            });
+            
+            await remove(ref(database, `rematchRequests/${window.currentUser.id}/${rematchId}`));
+            
+            document.getElementById('rematchModal').classList.remove('active');
+            document.getElementById('rematchVotes').style.display = 'block';
+            
+            window.rematchRequested = true;
+            showNotification('Waiting for other players...');
+        };
+
+        // Decline rematch request
+        window.declineRematchRequest = async function() {
+            const rematchId = window.currentRematchId;
+            await update(ref(database, `rematches/${rematchId}/votes`), {
+                [window.currentUser.id]: false
+            });
+            
+            await remove(ref(database, `rematchRequests/${window.currentUser.id}/${rematchId}`));
+            
+            document.getElementById('rematchModal').classList.remove('active');
+            showNotification('Rematch declined. Returning to lobby...');
+            
+            setTimeout(() => {
+                leaveGame();
+            }, 2000);
+        };
+
+        // Decline rematch (from game over modal)
+        window.declineRematch = function() {
+            document.getElementById('gameOverModal').classList.remove('active');
+            leaveGame();
+        };
+
+        // Start rematch
+        window.startRematch = async function(oldGame) {
+            // Close modals
+            document.getElementById('gameOverModal').classList.remove('active');
+            document.getElementById('rematchModal').classList.remove('active');
+            
+            // Create new game with same players
+            const gameId = 'game_' + Date.now();
+            window.currentGameId = gameId;
+
+            const deck = createDeck();
+            const trumpCard = deck[deck.length - 1];
+            
+            // Deal cards
+            const hands = {};
+            const cardsPerPlayer = 6;
+            let deckIndex = 0;
+
+            oldGame.players.forEach(id => {
+                hands[id] = [];
+                for (let i = 0; i < cardsPerPlayer; i++) {
+                    hands[id].push(deck[deckIndex++]);
+                }
+            });
+
+            const gameData = {
+                players: oldGame.players,
+                mode: oldGame.mode,
+                deck: deck.slice(deckIndex),
+                trump: trumpCard,
+                hands: hands,
+                attackZone: [],
+                currentAttacker: oldGame.players[0],
+                currentDefender: oldGame.players[1],
+                phase: 'attack',
+                createdAt: Date.now(),
+                playerNames: oldGame.playerNames,
+                finished: false,
+                rematchStarted: true
+            };
+
+            await set(ref(database, `activeGames/${gameId}`), gameData);
+            
+            // Remove old game
+            await remove(ref(database, `activeGames/${oldGame.createdAt ? 'game_' + oldGame.createdAt : window.currentGameId}`));
+            
+            window.rematchRequested = false;
+            showNotification('Rematch started!');
         };
 
         // Update game UI
@@ -1221,14 +1541,17 @@
                 const hand = game.hands[playerId] || [];
                 const isActive = playerId === game.currentAttacker;
                 const isDefender = playerId === game.currentDefender;
+                const isWinner = hand.length === 0 && game.deck.length === 0;
                 
                 const card = document.createElement('div');
                 card.className = 'player-status-card';
                 if (isActive) card.classList.add('active');
                 if (isDefender) card.classList.add('defender');
+                if (isWinner) card.classList.add('winner');
                 
                 let role = '';
-                if (isDefender) role = '🛡️ Defender';
+                if (isWinner) role = '🏆 Winner';
+                else if (isDefender) role = '🛡️ Defender';
                 else if (isActive) role = '⚔️ Attacker';
                 
                 card.innerHTML = `
@@ -1290,7 +1613,6 @@
             } else if (game.phase === 'defend' && isDefender) {
                 playDefendCard(index);
             } else if (game.phase === 'attack' && !isDefender && game.attackZone.length > 0) {
-                // Can add cards to attack
                 addToAttack(index);
             }
         };
@@ -1300,7 +1622,6 @@
             const game = window.gameState;
 
             if (game.attackZone.length > 0) {
-                // Check if card value matches existing cards
                 const validValues = game.attackZone.flatMap(p => [p.attack.value, p.defend?.value]).filter(Boolean);
                 if (!validValues.includes(card.value)) {
                     showNotification('Card value must match cards on table');
@@ -1314,7 +1635,6 @@
                 return;
             }
 
-            // Add to attack zone
             const newHand = [...window.myCards];
             newHand.splice(index, 1);
 
@@ -1331,24 +1651,17 @@
             const card = window.myCards[index];
             const game = window.gameState;
 
-            // PEREVODNOJ MODE: Check if can transfer attack
+            // PEREVODNOJ MODE: Check if can transfer
             if (game.mode === 'perevodnoj' && game.attackZone.length === 1 && !game.attackZone[0].defend) {
                 const attackCard = game.attackZone[0].attack;
                 
-                // Check if defender has card of same value to transfer
                 if (card.value === attackCard.value) {
-                    // Transfer attack to next player
                     const currentDefenderIndex = game.players.indexOf(game.currentDefender);
                     const nextDefenderIndex = (currentDefenderIndex + 1) % game.players.length;
                     const nextDefender = game.players[nextDefenderIndex];
                     
-                    // Check if next defender has enough cards
                     const nextDefenderHand = game.hands[nextDefender] || [];
-                    if (nextDefenderHand.length === 0) {
-                        showNotification('Cannot transfer - next player has no cards');
-                        // Fall through to normal defense
-                    } else {
-                        // Transfer the attack
+                    if (nextDefenderHand.length > 0) {
                         const newHand = [...window.myCards];
                         newHand.splice(index, 1);
 
@@ -1367,7 +1680,7 @@
                 }
             }
 
-            // NORMAL DEFENSE: Beat the card
+            // NORMAL DEFENSE
             const undefendedIndex = game.attackZone.findIndex(p => !p.defend);
             if (undefendedIndex === -1) {
                 showNotification('All cards are defended');
@@ -1381,7 +1694,6 @@
                 return;
             }
 
-            // Update
             const newHand = [...window.myCards];
             newHand.splice(index, 1);
 
@@ -1429,11 +1741,9 @@
             const game = window.gameState;
             if (game.currentDefender !== window.currentUser.id) return;
 
-            // Defender takes all cards
             const allCards = game.attackZone.flatMap(p => [p.attack, p.defend].filter(Boolean));
             const newHand = [...window.myCards, ...allCards];
 
-            // Next attacker is the defender
             const currentIndex = game.players.indexOf(game.currentDefender);
             const nextIndex = (currentIndex + 1) % game.players.length;
 
@@ -1451,14 +1761,12 @@
         window.finishTurn = async function() {
             const game = window.gameState;
             
-            // Verify all cards are defended
             const allDefended = game.attackZone.every(p => p.defend);
             if (!allDefended) {
                 showNotification('Cannot finish - not all cards are defended!');
                 return;
             }
 
-            // Discard attack zone and move to next turn
             const currentIndex = game.players.indexOf(game.currentAttacker);
             const nextAttacker = (currentIndex + 1) % game.players.length;
             const nextDefender = (nextAttacker + 1) % game.players.length;
@@ -1478,29 +1786,29 @@
             const newHands = { ...game.hands };
             let deck = [...game.deck];
 
-            // Refill to 6 cards
             game.players.forEach(playerId => {
                 while (newHands[playerId].length < 6 && deck.length > 0) {
                     newHands[playerId].push(deck.shift());
                 }
             });
 
-            // Check for winners
             const playersWithCards = game.players.filter(id => newHands[id].length > 0);
             
-            if (playersWithCards.length === 1) {
-                // Game over
-                showNotification(`${game.playerNames[playersWithCards[0]]} is the Durak!`);
-                setTimeout(() => {
-                    leaveGame();
-                }, 3000);
-                return;
-            }
-
-            await update(ref(database, `activeGames/${window.currentGameId}`), {
+            const updates = {
                 hands: newHands,
                 deck: deck
-            });
+            };
+
+            if (playersWithCards.length <= 1 && deck.length === 0) {
+                updates.finished = true;
+            }
+
+            await update(ref(database, `activeGames/${window.currentGameId}`), updates);
+
+            // Start listening for rematch requests if game just finished
+            if (updates.finished) {
+                listenForRematchRequests();
+            }
         };
 
         window.updateControls = function(game) {
@@ -1508,23 +1816,31 @@
             const doneBtn = document.getElementById('doneBtn');
 
             const isDefender = game.currentDefender === window.currentUser.id;
-            const isAttacker = game.currentAttacker === window.currentUser.id;
             const allDefended = game.attackZone.length > 0 && game.attackZone.every(p => p.defend);
             const hasUndefended = game.attackZone.some(p => !p.defend);
 
-            // Defender can take cards if there are undefended cards
             takeBtn.style.display = (isDefender && hasUndefended) ? 'inline-block' : 'none';
-            
-            // Anyone except current defender can click "Done" when all defended
-            // Or defender can click done if all cards are defended
             doneBtn.style.display = allDefended ? 'inline-block' : 'none';
         };
 
         window.leaveGame = async function() {
             if (window.currentGameId) {
-                await remove(ref(database, `activeGames/${window.currentGameId}`));
+                const game = window.gameState;
+                if (game && !game.finished) {
+                    // Remove player from active game
+                    const newPlayers = game.players.filter(id => id !== window.currentUser.id);
+                    if (newPlayers.length < 2) {
+                        // Not enough players, end game
+                        await remove(ref(database, `activeGames/${window.currentGameId}`));
+                    }
+                }
                 window.currentGameId = null;
             }
+            
+            window.rematchRequested = false;
+            document.getElementById('gameOverModal').classList.remove('active');
+            document.getElementById('rematchModal').classList.remove('active');
+            
             switchScreen('lobbyScreen');
         };
 
@@ -1532,12 +1848,6 @@
             if (window.currentUser) {
                 await remove(ref(database, `players/${window.currentUser.id}`));
                 window.currentUser = null;
-            }
-            
-            // Clear all invitation listeners
-            if (window.invitationListeners) {
-                Object.values(window.invitationListeners).forEach(unsubscribe => unsubscribe());
-                window.invitationListeners = {};
             }
             
             window.invitedPlayers.clear();
@@ -1558,15 +1868,6 @@
             setTimeout(() => {
                 notification.remove();
             }, 3000);
-        };
-
-        window.toggleDebug = function() {
-            const debugInfo = document.getElementById('debugInfo');
-            if (debugInfo.style.display === 'none') {
-                debugInfo.style.display = 'block';
-            } else {
-                debugInfo.style.display = 'none';
-            }
         };
     </script>
 </body>
