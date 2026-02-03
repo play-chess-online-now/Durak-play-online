@@ -808,6 +808,7 @@
         window.selectedCards = [];
         window.myCards = [];
         window.gameState = null;
+        window.currentInvitation = null;
 
         // Card utilities
         const suits = ['♠', '♣', '♥', '♦'];
@@ -961,39 +962,35 @@
             const playersSnapshot = await get(ref(database, 'players'));
             const playersData = playersSnapshot.val() || {};
 
+            let acceptedCount = 0;
+
             for (let playerId of window.invitedPlayers) {
                 const playerData = playersData[playerId];
                 if (playerData) {
                     const invitationSnapshot = await get(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
                     const invitation = invitationSnapshot.val();
                     
+                    const isAccepted = invitation?.status === 'accepted';
+                    if (isAccepted) acceptedCount++;
+                    
                     const card = document.createElement('div');
-                    card.className = 'invited-player-card ' + (invitation?.status === 'accepted' ? 'accepted' : 'pending');
+                    card.className = 'invited-player-card ' + (isAccepted ? 'accepted' : 'pending');
                     card.innerHTML = `
                         <div class="player-card-name">${playerData.nickname}</div>
-                        <div class="player-card-status">${invitation?.status === 'accepted' ? '✓ Accepted' : '⏳ Pending'}</div>
+                        <div class="player-card-status">${isAccepted ? '✓ Accepted' : '⏳ Pending'}</div>
                     `;
                     container.appendChild(card);
                 }
             }
 
-            // Check if can start
-            const acceptedCount = await getAcceptedCount();
-            const canStart = acceptedCount >= 1 && acceptedCount <= 3;
+            // Total players = host (1) + accepted invitations
+            const totalPlayers = 1 + acceptedCount;
+            
+            // Can start with 2-4 players total (so 1-3 accepted invitations)
+            const canStart = totalPlayers >= 2 && totalPlayers <= 4;
+            
             document.getElementById('startGameBtn').disabled = !canStart;
             document.getElementById('gameModeSelector').style.display = canStart ? 'block' : 'none';
-        };
-
-        window.getAcceptedCount = async function() {
-            let count = 0;
-            for (let playerId of window.invitedPlayers) {
-                const invitationSnapshot = await get(ref(database, `invitations/${playerId}/${window.currentUser.id}`));
-                const invitation = invitationSnapshot.val();
-                if (invitation?.status === 'accepted') {
-                    count++;
-                }
-            }
-            return count;
         };
 
         // Listen for invitations
@@ -1002,7 +999,7 @@
             onValue(invitationsRef, (snapshot) => {
                 const invitations = snapshot.val() || {};
                 Object.entries(invitations).forEach(([fromId, data]) => {
-                    if (data.status === 'pending') {
+                    if (data.status === 'pending' && !window.currentInvitation) {
                         showInvitationModal(data.from, fromId);
                     }
                 });
@@ -1019,6 +1016,13 @@
                     }
                 });
             });
+
+            // Monitor invitation responses for host
+            setInterval(async () => {
+                if (window.invitedPlayers.size > 0) {
+                    await updateInvitedPlayersUI();
+                }
+            }, 1000);
         };
 
         // Invitation modal
@@ -1033,6 +1037,7 @@
             await update(ref(database, `invitations/${window.currentUser.id}/${fromId}`), {
                 status: 'accepted'
             });
+            window.currentInvitation = null;
             document.getElementById('invitationModal').classList.remove('active');
             showNotification('Invitation accepted! Waiting for host to start...');
         };
@@ -1040,6 +1045,7 @@
         window.declineInvitation = async function() {
             const { fromId } = window.currentInvitation;
             await remove(ref(database, `invitations/${window.currentUser.id}/${fromId}`));
+            window.currentInvitation = null;
             document.getElementById('invitationModal').classList.remove('active');
         };
 
@@ -1054,12 +1060,6 @@
 
         // Start game
         window.startGame = async function() {
-            const acceptedCount = await getAcceptedCount();
-            if (acceptedCount < 1) {
-                showNotification('Need at least 2 players total');
-                return;
-            }
-
             // Get accepted players
             const playerIds = [window.currentUser.id];
             const playersSnapshot = await get(ref(database, 'players'));
@@ -1071,6 +1071,17 @@
                 if (invitation?.status === 'accepted') {
                     playerIds.push(playerId);
                 }
+            }
+
+            // Check player count (2-4 players)
+            if (playerIds.length < 2) {
+                showNotification('Need at least 2 players to start!');
+                return;
+            }
+
+            if (playerIds.length > 4) {
+                showNotification('Maximum 4 players allowed!');
+                return;
             }
 
             // Create game
@@ -1267,7 +1278,43 @@
             const card = window.myCards[index];
             const game = window.gameState;
 
-            // Find undefended card
+            // PEREVODNOJ MODE: Check if can transfer attack
+            if (game.mode === 'perevodnoj' && game.attackZone.length === 1 && !game.attackZone[0].defend) {
+                const attackCard = game.attackZone[0].attack;
+                
+                // Check if defender has card of same value to transfer
+                if (card.value === attackCard.value) {
+                    // Transfer attack to next player
+                    const currentDefenderIndex = game.players.indexOf(game.currentDefender);
+                    const nextDefenderIndex = (currentDefenderIndex + 1) % game.players.length;
+                    const nextDefender = game.players[nextDefenderIndex];
+                    
+                    // Check if next defender has enough cards
+                    const nextDefenderHand = game.hands[nextDefender] || [];
+                    if (nextDefenderHand.length === 0) {
+                        showNotification('Cannot transfer - next player has no cards');
+                        // Fall through to normal defense
+                    } else {
+                        // Transfer the attack
+                        const newHand = [...window.myCards];
+                        newHand.splice(index, 1);
+
+                        const newAttackZone = [...game.attackZone, { attack: card, defend: null }];
+
+                        await update(ref(database, `activeGames/${window.currentGameId}`), {
+                            [`hands/${window.currentUser.id}`]: newHand,
+                            attackZone: newAttackZone,
+                            currentDefender: nextDefender,
+                            phase: 'defend'
+                        });
+
+                        showNotification('Attack transferred!');
+                        return;
+                    }
+                }
+            }
+
+            // NORMAL DEFENSE: Beat the card
             const undefendedIndex = game.attackZone.findIndex(p => !p.defend);
             if (undefendedIndex === -1) {
                 showNotification('All cards are defended');
@@ -1351,7 +1398,14 @@
         window.finishTurn = async function() {
             const game = window.gameState;
             
-            // Discard attack zone
+            // Verify all cards are defended
+            const allDefended = game.attackZone.every(p => p.defend);
+            if (!allDefended) {
+                showNotification('Cannot finish - not all cards are defended!');
+                return;
+            }
+
+            // Discard attack zone and move to next turn
             const currentIndex = game.players.indexOf(game.currentAttacker);
             const nextAttacker = (currentIndex + 1) % game.players.length;
             const nextDefender = (nextAttacker + 1) % game.players.length;
@@ -1403,9 +1457,14 @@
             const isDefender = game.currentDefender === window.currentUser.id;
             const isAttacker = game.currentAttacker === window.currentUser.id;
             const allDefended = game.attackZone.length > 0 && game.attackZone.every(p => p.defend);
+            const hasUndefended = game.attackZone.some(p => !p.defend);
 
-            takeBtn.style.display = (isDefender && game.attackZone.length > 0) ? 'inline-block' : 'none';
-            doneBtn.style.display = (allDefended && (isAttacker || isDefender)) ? 'inline-block' : 'none';
+            // Defender can take cards if there are undefended cards
+            takeBtn.style.display = (isDefender && hasUndefended) ? 'inline-block' : 'none';
+            
+            // Anyone except current defender can click "Done" when all defended
+            // Or defender can click done if all cards are defended
+            doneBtn.style.display = allDefended ? 'inline-block' : 'none';
         };
 
         window.leaveGame = async function() {
