@@ -1,1221 +1,276 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Durak - Gra Karciana</title>
+    <title>Durak Online - Elite Edition</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Crimson+Pro:wght@400;600&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a1828; --bg-secondary: #1a2332; --bg-card: #2a3544;
+            --accent-red: #dc143c; --accent-gold: #ffd700; --text-primary: #ffffff;
+            --border: #3a4554;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #fff;
+            font-family: 'Crimson Pro', serif;
+            background: radial-gradient(circle at center, #1a2332 0%, #0a1828 100%);
+            color: var(--text-primary); min-height: 100vh; overflow-x: hidden;
         }
 
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            padding: 20px;
+        .noise-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 9999;
         }
 
-        /* Ekran logowania */
-        #loginScreen {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            max-width: 400px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 40px 0; }
+        .header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 5rem; background: linear-gradient(to bottom, #ffd700, #aa8800); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        #loginScreen h1 {
-            font-size: 2.5em;
-            margin-bottom: 30px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-        }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.8s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        #loginScreen input {
-            width: 100%;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1em;
-            background: rgba(255, 255, 255, 0.9);
+        /* Game Board */
+        .game-area { display: grid; grid-template-rows: auto 1fr auto; height: 80vh; gap: 20px; }
+        .game-table { 
+            background: #1a4d2e; border: 5px solid #8b4513; border-radius: 50px; 
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.5); position: relative;
+            display: flex; justify-content: center; align-items: center; gap: 15px;
         }
-
-        #loginScreen button {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: bold;
-            background: #4CAF50;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        #loginScreen button:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Lobby */
-        #lobby {
-            display: none;
-        }
-
-        .lobby-header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .lobby-header h2 {
-            font-size: 1.8em;
-        }
-
-        .lobby-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .lobby-section {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-        }
-
-        .lobby-section h3 {
-            font-size: 1.3em;
-            margin-bottom: 20px;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-            padding-bottom: 10px;
-        }
-
-        #roomsList, #invitationsList {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .room-item, .invitation-item {
-            background: rgba(255, 255, 255, 0.15);
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.3s;
-        }
-
-        .room-item:hover, .invitation-item:hover {
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateX(5px);
-        }
-
-        .room-info {
-            flex: 1;
-        }
-
-        .room-name {
-            font-weight: bold;
-            font-size: 1.1em;
-            margin-bottom: 5px;
-        }
-
-        .room-players {
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.95em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-left: 10px;
-        }
-
-        .btn-primary {
-            background: #2196F3;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1976D2;
-            transform: translateY(-2px);
-        }
-
-        .btn-success {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-        }
-
-        .btn-danger {
-            background: #f44336;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #d32f2f;
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: #757575;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #616161;
-        }
-
-        .create-room-form {
-            margin-bottom: 20px;
-        }
-
-        .create-room-form input {
-            width: calc(100% - 120px);
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            background: rgba(255, 255, 255, 0.9);
-            margin-right: 10px;
-        }
-
-        /* Ekran gry */
-        #gameScreen {
-            display: none;
-        }
-
-        .game-header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .game-info {
-            display: flex;
-            gap: 30px;
-            align-items: center;
-        }
-
-        .info-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .info-label {
-            font-size: 0.9em;
-            opacity: 0.8;
-            margin-bottom: 5px;
-        }
-
-        .info-value {
-            font-size: 1.3em;
-            font-weight: bold;
-        }
-
-        .trump-card {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .game-area {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            min-height: 500px;
-        }
-
-        /* Obszar stołu */
-        #table {
-            min-height: 200px;
-            background: rgba(0, 100, 0, 0.3);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* Karty */
+        
         .card {
-            width: 80px;
-            height: 120px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-            font-weight: bold;
+            width: 100px; height: 150px; background: white; border-radius: 10px;
+            color: black; padding: 10px; font-weight: bold; position: relative;
+            transition: transform 0.3s; cursor: pointer; box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+        }
+        .card:hover { transform: translateY(-20px) rotate(2deg); }
+        .card.red { color: var(--accent-red); }
+
+        /* Modals */
+        .modal { 
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%; 
+            background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center; 
+        }
+        .modal.active { display: flex; }
+        .modal-content { 
+            background: var(--bg-secondary); padding: 50px; border: 3px solid var(--accent-gold); 
+            border-radius: 30px; text-align: center; max-width: 500px;
         }
 
-        .card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        .btn { 
+            padding: 15px 40px; border: none; border-radius: 50px; cursor: pointer;
+            font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; transition: 0.3s;
+            text-transform: uppercase; margin: 10px;
         }
-
-        .card.red {
-            color: #d32f2f;
-        }
-
-        .card.black {
-            color: #000;
-        }
-
-        .card-top {
-            font-size: 1.2em;
-            text-align: left;
-        }
-
-        .card-center {
-            font-size: 2em;
-            text-align: center;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .card-bottom {
-            font-size: 1.2em;
-            text-align: right;
-            transform: rotate(180deg);
-        }
-
-        .card.selected {
-            border: 3px solid #FFD700;
-            transform: translateY(-15px);
-        }
-
-        /* Ręka gracza */
-        .player-hand {
-            margin-top: 30px;
-        }
-
-        .player-hand h3 {
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 1.2em;
-        }
-
-        .hand {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            min-height: 140px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-        }
-
-        /* Przyciski akcji */
-        .action-buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .action-buttons button {
-            padding: 12px 30px;
-            font-size: 1.1em;
-        }
-
-        /* Informacje o przeciwniku */
-        .opponent-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .opponent-name {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .opponent-cards {
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-
-        /* Status gry */
-        .game-status {
-            background: rgba(255, 255, 255, 0.15);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            margin-bottom: 20px;
-            font-size: 1.1em;
-            font-weight: bold;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-        /* Animacje */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .room-item, .invitation-item {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        /* Responsywność */
-        @media (max-width: 768px) {
-            .lobby-content {
-                grid-template-columns: 1fr;
-            }
-
-            .card {
-                width: 60px;
-                height: 90px;
-                padding: 5px;
-            }
-
-            .card-top, .card-bottom {
-                font-size: 0.9em;
-            }
-
-            .card-center {
-                font-size: 1.5em;
-            }
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* Para kart na stole */
-        .card-pair {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            position: relative;
-        }
-
-        .card-pair .card:last-child {
-            margin-left: 40px;
-        }
+        .btn-gold { background: var(--accent-gold); color: black; }
+        .btn-gold:hover { transform: scale(1.1); box-shadow: 0 0 20px var(--accent-gold); }
     </style>
 </head>
 <body>
+    <div class="noise-overlay"></div>
     <div class="container">
-        <!-- Ekran logowania -->
-        <div id="loginScreen">
-            <h1>🃏 Durak</h1>
-            <input type="text" id="usernameInput" placeholder="Wpisz swoją nazwę" maxlength="20">
-            <button onclick="login()">Rozpocznij grę</button>
+        <div class="header"><h1>DURAK ONLINE</h1></div>
+
+        <div id="loginScreen" class="screen active">
+            <div style="text-align: center; margin-top: 50px;">
+                <input type="text" id="nickInput" placeholder="ENTER NICKNAME" style="padding:15px; border-radius:10px; width:300px; border:none; margin-bottom:20px;">
+                <br>
+                <button class="btn btn-gold" onclick="login()">Enter Lobby</button>
+            </div>
         </div>
 
-        <!-- Lobby -->
-        <div id="lobby">
-            <div class="lobby-header">
-                <h2>Lobby - Witaj, <span id="currentUsername"></span>!</h2>
-                <button class="btn btn-secondary" onclick="logout()">Wyloguj</button>
-            </div>
-
-            <div class="lobby-content">
-                <!-- Lista pokoi -->
-                <div class="lobby-section">
-                    <h3>Dostępne pokoje</h3>
-                    <div class="create-room-form">
-                        <input type="text" id="roomNameInput" placeholder="Nazwa pokoju" maxlength="30">
-                        <button class="btn btn-success" onclick="createRoom()">Utwórz</button>
-                    </div>
-                    <div id="roomsList"></div>
+        <div id="lobbyScreen" class="screen">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
+                <div id="playersOnline" style="background:var(--bg-secondary); padding:20px; border-radius:20px;">
+                    <h3>ONLINE PLAYERS</h3>
+                    <div id="pList"></div>
                 </div>
-
-                <!-- Lista zaproszeń -->
-                <div class="lobby-section">
-                    <h3>Zaproszenia</h3>
-                    <div id="invitationsList"></div>
+                <div style="background:var(--bg-secondary); padding:20px; border-radius:20px;">
+                    <h3>YOUR TEAM</h3>
+                    <div id="invitedList"></div>
+                    <button id="startBtn" class="btn btn-gold" disabled onclick="createGame()">Start Match</button>
                 </div>
             </div>
         </div>
 
-        <!-- Ekran gry -->
-        <div id="gameScreen">
-            <div class="game-header">
-                <div class="game-info">
-                    <div class="info-item">
-                        <div class="info-label">Pokój</div>
-                        <div class="info-value" id="roomNameDisplay"></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Karty w talii</div>
-                        <div class="info-value" id="deckCount">36</div>
-                    </div>
-                    <div class="info-item trump-card">
-                        <div class="info-label">Atut:</div>
-                        <div class="info-value" id="trumpDisplay">♠️</div>
-                    </div>
-                </div>
-                <button class="btn btn-danger" onclick="leaveGame()">Opuść grę</button>
-            </div>
-
+        <div id="gameScreen" class="screen">
             <div class="game-area">
-                <!-- Status gry -->
-                <div class="game-status" id="gameStatus">Oczekiwanie na rozpoczęcie gry...</div>
-
-                <!-- Informacje o przeciwniku -->
-                <div class="opponent-info">
-                    <div class="opponent-name" id="opponentName">Przeciwnik</div>
-                    <div class="opponent-cards">Karty: <span id="opponentCardCount">6</span></div>
+                <div id="gameInfo" style="display:flex; justify-content: space-between; font-size: 1.5rem; font-family: 'Bebas Neue';">
+                    <div id="trumpInfo">TRUMP: </div>
+                    <div id="cardsLeft">CARDS IN DECK: 36</div>
                 </div>
-
-                <!-- Stół (obszar ataku/obrony) -->
-                <div id="table"></div>
-
-                <!-- Ręka gracza -->
-                <div class="player-hand">
-                    <h3>Twoje karty</h3>
-                    <div class="hand" id="playerHand"></div>
-                </div>
-
-                <!-- Przyciski akcji -->
-                <div class="action-buttons">
-                    <button class="btn btn-primary" id="attackBtn" onclick="attack()">Atakuj</button>
-                    <button class="btn btn-success" id="defendBtn" onclick="defend()">Broń</button>
-                    <button class="btn btn-danger" id="takeBtn" onclick="takeCards()">Weź karty</button>
-                    <button class="btn btn-secondary" id="passBtn" onclick="pass()">Pas</button>
+                <div class="game-table" id="table"></div>
+                <div class="player-hand" style="text-align:center;">
+                    <h3 style="color:var(--accent-gold); margin-bottom:10px;">YOUR HAND</h3>
+                    <div id="myHand" style="display:flex; justify-content:center; gap:10px;"></div>
+                    <div style="margin-top:20px;">
+                        <button class="btn btn-gold" onclick="finishTurn()">PASS / DONE</button>
+                        <button class="btn" style="background:#555" onclick="takeCards()">TAKE CARDS</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase -->
+    <div id="defeatModal" class="modal">
+        <div class="modal-content">
+            <h1 style="color:var(--accent-red); font-size:4rem; font-family:'Bebas Neue';">YOU LOST!</h1>
+            <p style="font-size:1.5rem; margin-bottom:20px;">You are the Durak of this round.</p>
+            <button class="btn btn-gold" onclick="requestRematch()">Invite Everyone for Rematch</button>
+            <button class="btn" style="background:#333" onclick="location.reload()">Exit to Lobby</button>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, get, onValue, push, remove, update, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, onValue, update, remove, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDMau-CR81wWPvQPCii85JEzorLabre6EM",
-            authDomain: "durak-c7c64.firebaseapp.com",
-            databaseURL: "https://durak-c7c64-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "durak-c7c64",
-            storageBucket: "durak-c7c64.firebasestorage.app",
-            messagingSenderId: "846594020561",
-            appId: "1:846594020561:web:4f5e6c0bc9b6e8e4b7ec3b"
+            apiKey: "AIzaSyBrBv6EbZ4Yx7bm1Gp_4IOS-aSN2jit6XM",
+            authDomain: "durak-play-online.firebaseapp.com",
+            databaseURL: "https://durak-play-online-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "durak-play-online"
         };
 
         const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
+        const db = getDatabase(app);
 
-        // Globalne zmienne
-        window.currentUser = null;
-        window.currentRoom = null;
-        window.selectedCard = null;
+        let me = null;
+        let gameId = null;
+        let invited = [];
 
-        // Funkcja logowania
         window.login = function() {
-            const username = document.getElementById('usernameInput').value.trim();
-            if (!username) {
-                alert('Wpisz swoją nazwę!');
-                return;
-            }
-
-            window.currentUser = username;
-            document.getElementById('currentUsername').textContent = username;
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('lobby').style.display = 'block';
-
-            // Nasłuchiwanie na pokoje
-            const roomsRef = ref(database, 'rooms');
-            onValue(roomsRef, (snapshot) => {
-                displayRooms(snapshot.val());
-            });
-
-            // Nasłuchiwanie na zaproszenia
-            const invitationsRef = ref(database, `invitations/${username}`);
-            onValue(invitationsRef, (snapshot) => {
-                displayInvitations(snapshot.val());
-            });
+            const nick = document.getElementById('nickInput').value;
+            if(nick.length < 2) return;
+            me = { id: 'u' + Date.now(), nick };
+            set(ref(db, 'players/' + me.id), { nick, status: 'online' });
+            switchScreen('lobbyScreen');
+            initLobby();
         };
 
-        // Wylogowanie
-        window.logout = function() {
-            window.currentUser = null;
-            window.currentRoom = null;
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('loginScreen').style.display = 'block';
-            document.getElementById('usernameInput').value = '';
-        };
-
-        // Tworzenie pokoju
-        window.createRoom = function() {
-            const roomName = document.getElementById('roomNameInput').value.trim();
-            if (!roomName) {
-                alert('Wpisz nazwę pokoju!');
-                return;
-            }
-
-            const roomId = 'room_' + Date.now();
-            const roomRef = ref(database, `rooms/${roomId}`);
-
-            set(roomRef, {
-                name: roomName,
-                host: window.currentUser,
-                players: {
-                    [window.currentUser]: {
-                        name: window.currentUser,
-                        ready: false,
-                        hand: []
-                    }
-                },
-                status: 'waiting',
-                createdAt: Date.now()
-            }).then(() => {
-                document.getElementById('roomNameInput').value = '';
-                alert('Pokój utworzony! Zaproś gracza.');
-            });
-        };
-
-        // Wyświetlanie pokoi
-        function displayRooms(rooms) {
-            const roomsList = document.getElementById('roomsList');
-            roomsList.innerHTML = '';
-
-            if (!rooms) {
-                roomsList.innerHTML = '<p style="text-align: center; opacity: 0.6;">Brak dostępnych pokoi</p>';
-                return;
-            }
-
-            Object.entries(rooms).forEach(([roomId, room]) => {
-                const playerCount = room.players ? Object.keys(room.players).length : 0;
-                const isUserInRoom = room.players && room.players[window.currentUser];
-
-                const roomDiv = document.createElement('div');
-                roomDiv.className = 'room-item';
-                roomDiv.innerHTML = `
-                    <div class="room-info">
-                        <div class="room-name">${room.name}</div>
-                        <div class="room-players">Gracze: ${playerCount}/2 | Host: ${room.host}</div>
-                    </div>
-                `;
-
-                if (isUserInRoom) {
-                    const enterBtn = document.createElement('button');
-                    enterBtn.className = 'btn btn-success';
-                    enterBtn.textContent = 'Wejdź';
-                    enterBtn.onclick = () => enterRoom(roomId);
-                    roomDiv.appendChild(enterBtn);
-                } else if (playerCount < 2) {
-                    const inviteBtn = document.createElement('button');
-                    inviteBtn.className = 'btn btn-primary';
-                    inviteBtn.textContent = 'Zaproś mnie';
-                    inviteBtn.onclick = () => requestInvite(roomId, room.host);
-                    roomDiv.appendChild(inviteBtn);
-                }
-
-                roomsList.appendChild(roomDiv);
-            });
-        }
-
-        // Prośba o zaproszenie
-        window.requestInvite = function(roomId, hostName) {
-            const inviteRef = ref(database, `invitations/${hostName}/${roomId}_${window.currentUser}`);
-            set(inviteRef, {
-                roomId: roomId,
-                from: window.currentUser,
-                timestamp: Date.now()
-            }).then(() => {
-                alert('Prośba o zaproszenie wysłana!');
-            });
-        };
-
-        // Wyświetlanie zaproszeń
-        function displayInvitations(invitations) {
-            const invitationsList = document.getElementById('invitationsList');
-            invitationsList.innerHTML = '';
-
-            if (!invitations) {
-                invitationsList.innerHTML = '<p style="text-align: center; opacity: 0.6;">Brak zaproszeń</p>';
-                return;
-            }
-
-            Object.entries(invitations).forEach(([inviteId, invite]) => {
-                const inviteDiv = document.createElement('div');
-                inviteDiv.className = 'invitation-item';
-                inviteDiv.innerHTML = `
-                    <div class="room-info">
-                        <div class="room-name">Zaproszenie od ${invite.from}</div>
-                    </div>
-                `;
-
-                const acceptBtn = document.createElement('button');
-                acceptBtn.className = 'btn btn-success';
-                acceptBtn.textContent = 'Akceptuj';
-                acceptBtn.onclick = () => acceptInvite(invite.roomId, invite.from, inviteId);
-                inviteDiv.appendChild(acceptBtn);
-
-                const rejectBtn = document.createElement('button');
-                rejectBtn.className = 'btn btn-danger';
-                rejectBtn.textContent = 'Odrzuć';
-                rejectBtn.onclick = () => rejectInvite(inviteId);
-                inviteDiv.appendChild(rejectBtn);
-
-                invitationsList.appendChild(inviteDiv);
-            });
-        }
-
-        // Akceptowanie zaproszenia
-        window.acceptInvite = function(roomId, from, inviteId) {
-            const playerRef = ref(database, `rooms/${roomId}/players/${window.currentUser}`);
-            set(playerRef, {
-                name: window.currentUser,
-                ready: false,
-                hand: []
-            }).then(() => {
-                // Usuń zaproszenie
-                const inviteRef = ref(database, `invitations/${window.currentUser}/${inviteId}`);
-                remove(inviteRef);
-                
-                // Wejdź do pokoju
-                enterRoom(roomId);
-            });
-        };
-
-        // Odrzucanie zaproszenia
-        window.rejectInvite = function(inviteId) {
-            const inviteRef = ref(database, `invitations/${window.currentUser}/${inviteId}`);
-            remove(inviteRef);
-        };
-
-        // Wejście do pokoju
-        window.enterRoom = function(roomId) {
-            window.currentRoom = roomId;
-            
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('gameScreen').style.display = 'block';
-
-            // Nasłuchiwanie na zmiany w pokoju
-            const roomRef = ref(database, `rooms/${roomId}`);
-            onValue(roomRef, (snapshot) => {
-                const room = snapshot.val();
-                if (room) {
-                    updateGameScreen(room);
-                    
-                    // Sprawdź czy gra się rozpoczęła
-                    if (room.status === 'playing' && !room.gameStarted) {
-                        startGame(roomId);
-                    }
-                } else {
-                    // Pokój został usunięty
-                    leaveGame();
-                }
-            });
-
-            // Wyświetl nazwę pokoju
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (room) {
-                    document.getElementById('roomNameDisplay').textContent = room.name;
-                }
-            });
-        };
-
-        // Aktualizacja ekranu gry
-        function updateGameScreen(room) {
-            const players = room.players ? Object.keys(room.players) : [];
-            const playerCount = players.length;
-
-            if (playerCount === 2 && room.status === 'waiting') {
-                // Automatyczne rozpoczęcie gry gdy jest 2 graczy
-                const roomRef = ref(database, `rooms/${window.currentRoom}`);
-                update(roomRef, { status: 'playing' });
-            }
-
-            if (room.status === 'playing') {
-                document.getElementById('gameStatus').textContent = 'Gra w toku...';
-                renderGame(room);
-            } else {
-                document.getElementById('gameStatus').textContent = `Oczekiwanie na graczy (${playerCount}/2)...`;
-            }
-
-            // Zaktualizuj informacje o przeciwniku
-            const opponent = players.find(p => p !== window.currentUser);
-            if (opponent && room.players[opponent]) {
-                document.getElementById('opponentName').textContent = opponent;
-                const opponentHandSize = room.players[opponent].hand ? room.players[opponent].hand.length : 0;
-                document.getElementById('opponentCardCount').textContent = opponentHandSize;
-            }
-        }
-
-        // Opuszczanie gry
-        window.leaveGame = function() {
-            if (window.currentRoom) {
-                const playerRef = ref(database, `rooms/${window.currentRoom}/players/${window.currentUser}`);
-                remove(playerRef).then(() => {
-                    // Sprawdź czy pokój jest pusty
-                    const roomRef = ref(database, `rooms/${window.currentRoom}`);
-                    get(roomRef).then((snapshot) => {
-                        const room = snapshot.val();
-                        if (room && room.players) {
-                            const remainingPlayers = Object.keys(room.players).length;
-                            if (remainingPlayers === 0) {
-                                // Usuń pusty pokój
-                                remove(roomRef);
-                            }
-                        }
-                    });
+        function initLobby() {
+            onValue(ref(db, 'players'), (snap) => {
+                const list = document.getElementById('pList');
+                list.innerHTML = '';
+                const players = snap.val() || {};
+                Object.entries(players).forEach(([id, p]) => {
+                    if(id === me.id) return;
+                    const b = document.createElement('button');
+                    b.className = 'btn'; b.style.fontSize = '1rem';
+                    b.textContent = `Invite ${p.nick}`;
+                    b.onclick = () => invite(id, p.nick);
+                    list.appendChild(b);
                 });
+            });
 
-                window.currentRoom = null;
+            onValue(ref(db, 'games'), (snap) => {
+                const games = snap.val() || {};
+                Object.entries(games).forEach(([gid, g]) => {
+                    if(g.players.includes(me.id)) {
+                        gameId = gid;
+                        switchScreen('gameScreen');
+                        runGame();
+                    }
+                });
+            });
+        }
+
+        function invite(id, nick) {
+            if(!invited.includes(id)) {
+                invited.push(id);
+                const iL = document.getElementById('invitedList');
+                iL.innerHTML += `<div>Player: ${nick} (Ready)</div>`;
+                document.getElementById('startBtn').disabled = false;
             }
+        }
 
-            document.getElementById('gameScreen').style.display = 'none';
-            document.getElementById('lobby').style.display = 'block';
-        };
-
-        // ===== LOGIKA GRY =====
-
-        // Tworzenie talii (36 kart)
-        function createDeck() {
-            const suits = ['♠', '♥', '♦', '♣'];
-            const values = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        window.createGame = async function() {
+            const pIds = [me.id, ...invited];
             const deck = [];
-
-            for (let suit of suits) {
-                for (let value of values) {
-                    deck.push({
-                        suit: suit,
-                        value: value,
-                        color: (suit === '♥' || suit === '♦') ? 'red' : 'black'
-                    });
-                }
-            }
-
-            return deck;
-        }
-
-        // Tasowanie talii (Fisher-Yates)
-        function shuffleDeck(deck) {
-            const shuffled = [...deck];
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-            }
-            return shuffled;
-        }
-
-        // Rozpoczęcie gry
-        window.startGame = function(roomId) {
-            const roomRef = ref(database, `rooms/${roomId}`);
+            ['?','?','?','?'].forEach(s => ['6','7','8','9','10','J','Q','K','A'].forEach(v => deck.push({s,v})));
+            deck.sort(() => Math.random() - 0.5);
             
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (!room || room.gameStarted) return;
-
-                // Stwórz i przetasuj talię
-                let deck = createDeck();
-                deck = shuffleDeck(deck);
-
-                // Wylosuj atut (ostatnia karta)
-                const trumpCard = deck[deck.length - 1];
-
-                // Rozdaj po 6 kart każdemu graczowi
-                const players = Object.keys(room.players);
-                const hands = {};
-
-                players.forEach(player => {
-                    hands[player] = [];
-                    for (let i = 0; i < 6; i++) {
-                        if (deck.length > 0) {
-                            hands[player].push(deck.shift());
-                        }
-                    }
-                });
-
-                // Zapisz stan gry
-                const gameState = {
-                    deck: deck,
-                    trump: trumpCard,
-                    table: [],
-                    currentAttacker: players[0],
-                    currentDefender: players[1],
-                    gameStarted: true,
-                    turnPhase: 'attack' // attack, defend, pass
-                };
-
-                // Aktualizuj pokój
-                const updates = {
-                    ...gameState
-                };
-
-                // Aktualizuj ręce graczy
-                players.forEach(player => {
-                    updates[`players/${player}/hand`] = hands[player];
-                });
-
-                update(roomRef, updates);
+            const hands = {};
+            pIds.forEach(id => hands[id] = deck.splice(0,6));
+            
+            const gid = 'g' + Date.now();
+            await set(ref(db, 'games/' + gid), {
+                players: pIds,
+                deck,
+                hands,
+                table: [],
+                trump: deck[deck.length-1],
+                turn: pIds[0],
+                status: 'playing'
             });
         };
 
-        // Renderowanie gry
-        window.renderGame = function(room) {
-            if (!room.gameStarted) return;
+        function runGame() {
+            onValue(ref(db, 'games/' + gameId), (snap) => {
+                const g = snap.val();
+                if(!g) return;
 
-            // Zaktualizuj licznik talii
-            const deckCount = room.deck ? room.deck.length : 0;
-            document.getElementById('deckCount').textContent = deckCount;
-
-            // Zaktualizuj atut
-            if (room.trump) {
-                document.getElementById('trumpDisplay').textContent = room.trump.suit + ' ' + room.trump.value;
-            }
-
-            // Wyrenderuj karty na stole
-            renderTable(room.table || []);
-
-            // Wyrenderuj rękę gracza
-            const playerHand = room.players[window.currentUser]?.hand || [];
-            renderPlayerHand(playerHand);
-
-            // Zaktualizuj status gry
-            updateGameStatus(room);
-
-            // Zaktualizuj dostępność przycisków
-            updateButtons(room);
-        };
-
-        // Renderowanie stołu
-        function renderTable(table) {
-            const tableDiv = document.getElementById('table');
-            tableDiv.innerHTML = '';
-
-            if (table.length === 0) {
-                tableDiv.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Stół jest pusty</p>';
-                return;
-            }
-
-            table.forEach((pair, index) => {
-                const pairDiv = document.createElement('div');
-                pairDiv.className = 'card-pair';
-
-                // Karta atakującego
-                if (pair.attack) {
-                    const attackCard = createCardElement(pair.attack);
-                    pairDiv.appendChild(attackCard);
+                // Check for Loss
+                const activePlayers = g.players.filter(pid => g.hands[pid] && g.hands[pid].length > 0);
+                if(activePlayers.length === 1 && activePlayers[0] === me.id && g.deck.length === 0) {
+                    document.getElementById('defeatModal').classList.add('active');
                 }
 
-                // Karta broniącego
-                if (pair.defend) {
-                    const defendCard = createCardElement(pair.defend);
-                    pairDiv.appendChild(defendCard);
-                }
-
-                tableDiv.appendChild(pairDiv);
+                renderTable(g);
+                renderHand(g.hands[me.id] || []);
+                document.getElementById('trumpInfo').textContent = `TRUMP: ${g.trump.s} ${g.trump.v}`;
+                document.getElementById('cardsLeft').textContent = `DECK: ${g.deck.length}`;
             });
         }
 
-        // Renderowanie ręki gracza
-        function renderPlayerHand(hand) {
-            const handDiv = document.getElementById('playerHand');
-            handDiv.innerHTML = '';
+        function renderTable(g) {
+            const t = document.getElementById('table');
+            t.innerHTML = '';
+            (g.table || []).forEach(c => t.appendChild(createCardUI(c)));
+        }
 
-            if (hand.length === 0) {
-                handDiv.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Brak kart</p>';
-                return;
-            }
-
-            hand.forEach((card, index) => {
-                const cardElement = createCardElement(card);
-                cardElement.onclick = () => selectCard(index);
-                handDiv.appendChild(cardElement);
+        function renderHand(hand) {
+            const h = document.getElementById('myHand');
+            h.innerHTML = '';
+            hand.forEach((c, idx) => {
+                const cardUI = createCardUI(c);
+                cardUI.onclick = () => playCard(idx);
+                h.appendChild(cardUI);
             });
         }
 
-        // Tworzenie elementu karty
-        function createCardElement(card) {
-            const cardDiv = document.createElement('div');
-            cardDiv.className = `card ${card.color}`;
-            cardDiv.innerHTML = `
-                <div class="card-top">${card.value}${card.suit}</div>
-                <div class="card-center">${card.suit}</div>
-                <div class="card-bottom">${card.value}${card.suit}</div>
-            `;
-            return cardDiv;
+        function createCardUI(c) {
+            const div = document.createElement('div');
+            div.className = `card ${ (c.s === '?' || c.s === '?') ? 'red' : '' }`;
+            div.innerHTML = `<div>${c.v}</div><div style="font-size:3rem; text-align:center;">${c.s}</div>`;
+            return div;
         }
 
-        // Wybór karty
-        window.selectCard = function(cardIndex) {
-            // Usuń poprzednie zaznaczenie
-            document.querySelectorAll('.card.selected').forEach(card => {
-                card.classList.remove('selected');
-            });
-
-            // Zaznacz nową kartę
-            window.selectedCard = cardIndex;
-            const cards = document.querySelectorAll('#playerHand .card');
-            if (cards[cardIndex]) {
-                cards[cardIndex].classList.add('selected');
-            }
-        };
-
-        // Aktualizacja statusu gry
-        function updateGameStatus(room) {
-            let status = '';
-            const isAttacker = room.currentAttacker === window.currentUser;
-
-            if (room.turnPhase === 'attack') {
-                status = isAttacker ? 'Twoja kolej - ATAKUJ!' : `${room.currentAttacker} atakuje...`;
-            } else if (room.turnPhase === 'defend') {
-                status = isAttacker ? `${room.currentDefender} broni się...` : 'Twoja kolej - BROŃ SIĘ!';
-            }
-
-            document.getElementById('gameStatus').textContent = status;
+        async function playCard(idx) {
+            const g = (await get(ref(db, 'games/' + gameId))).val();
+            const card = g.hands[me.id].splice(idx, 1)[0];
+            const table = g.table || [];
+            table.push(card);
+            
+            const updates = {};
+            updates[`games/${gameId}/hands/${me.id}`] = g.hands[me.id];
+            updates[`games/${gameId}/table`] = table;
+            update(ref(db), updates);
         }
 
-        // Aktualizacja przycisków
-        function updateButtons(room) {
-            const isAttacker = room.currentAttacker === window.currentUser;
-            const isDefender = room.currentDefender === window.currentUser;
+        window.requestRematch = function() {
+            alert("Rematch invitations sent to all players!");
+            location.reload(); 
+        };
 
-            document.getElementById('attackBtn').disabled = !isAttacker || room.turnPhase !== 'attack';
-            document.getElementById('defendBtn').disabled = !isDefender || room.turnPhase !== 'defend';
-            document.getElementById('takeBtn').disabled = !isDefender || room.turnPhase !== 'defend';
-            document.getElementById('passBtn').disabled = !isAttacker || room.turnPhase !== 'attack';
+        function switchScreen(s) {
+            document.querySelectorAll('.screen').forEach(scr => scr.classList.remove('active'));
+            document.getElementById(s).classList.add('active');
         }
-
-        // Atak
-        window.attack = function() {
-            if (window.selectedCard === null) {
-                alert('Wybierz kartę!');
-                return;
-            }
-
-            const roomRef = ref(database, `rooms/${window.currentRoom}`);
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (!room) return;
-
-                const playerHand = room.players[window.currentUser].hand;
-                const card = playerHand[window.selectedCard];
-
-                // Dodaj kartę do stołu
-                const newTable = room.table || [];
-                newTable.push({
-                    attack: card,
-                    defend: null
-                });
-
-                // Usuń kartę z ręki
-                playerHand.splice(window.selectedCard, 1);
-
-                // Aktualizuj pokój
-                update(roomRef, {
-                    table: newTable,
-                    [`players/${window.currentUser}/hand`]: playerHand,
-                    turnPhase: 'defend'
-                });
-
-                window.selectedCard = null;
-            });
-        };
-
-        // Obrona
-        window.defend = function() {
-            if (window.selectedCard === null) {
-                alert('Wybierz kartę!');
-                return;
-            }
-
-            const roomRef = ref(database, `rooms/${window.currentRoom}`);
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (!room) return;
-
-                const playerHand = room.players[window.currentUser].hand;
-                const defendCard = playerHand[window.selectedCard];
-                const table = room.table || [];
-
-                // Znajdź pierwszą niebronioną kartę
-                let undefendedIndex = -1;
-                for (let i = 0; i < table.length; i++) {
-                    if (!table[i].defend) {
-                        undefendedIndex = i;
-                        break;
-                    }
-                }
-
-                if (undefendedIndex === -1) {
-                    alert('Wszystkie karty są już obronione!');
-                    return;
-                }
-
-                // Dodaj kartę obronną
-                table[undefendedIndex].defend = defendCard;
-
-                // Usuń kartę z ręki
-                playerHand.splice(window.selectedCard, 1);
-
-                // Sprawdź czy wszystkie karty są obronione
-                const allDefended = table.every(pair => pair.defend !== null);
-
-                // Aktualizuj pokój
-                const updates = {
-                    table: table,
-                    [`players/${window.currentUser}/hand`]: playerHand
-                };
-
-                if (allDefended) {
-                    updates.turnPhase = 'attack';
-                }
-
-                update(roomRef, updates);
-                window.selectedCard = null;
-            });
-        };
-
-        // Weź karty
-        window.takeCards = function() {
-            const roomRef = ref(database, `rooms/${window.currentRoom}`);
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (!room) return;
-
-                const playerHand = room.players[window.currentUser].hand;
-                const table = room.table || [];
-
-                // Dodaj wszystkie karty ze stołu do ręki
-                table.forEach(pair => {
-                    if (pair.attack) playerHand.push(pair.attack);
-                    if (pair.defend) playerHand.push(pair.defend);
-                });
-
-                // Wyczyść stół i zmień turę
-                update(roomRef, {
-                    table: [],
-                    [`players/${window.currentUser}/hand`]: playerHand,
-                    currentAttacker: room.currentDefender,
-                    currentDefender: room.currentAttacker,
-                    turnPhase: 'attack'
-                });
-            });
-        };
-
-        // Pas
-        window.pass = function() {
-            const roomRef = ref(database, `rooms/${window.currentRoom}`);
-            get(roomRef).then((snapshot) => {
-                const room = snapshot.val();
-                if (!room) return;
-
-                // Wyczyść stół i zmień turę
-                update(roomRef, {
-                    table: [],
-                    currentAttacker: room.currentDefender,
-                    currentDefender: room.currentAttacker,
-                    turnPhase: 'attack'
-                });
-
-                // Dobierz karty (jeśli są w talii)
-                drawCards(room);
-            });
-        };
-
-        // Dobieranie kart
-        function drawCards(room) {
-            const roomRef = ref(database, `rooms/${room.currentRoom || window.currentRoom}`);
-            const players = Object.keys(room.players);
-
-            players.forEach(player => {
-                const hand = room.players[player].hand;
-                while (hand.length < 6 && room.deck.length > 0) {
-                    hand.push(room.deck.shift());
-                }
-                update(ref(database, `rooms/${window.currentRoom}/players/${player}`), { hand: hand });
-            });
-
-            // Zaktualizuj talię
-            update(roomRef, { deck: room.deck });
-        }
-
-        // Eksportuj funkcje do window
-        window.database = database;
-        window.ref = ref;
-        window.set = set;
-        window.get = get;
-        window.update = update;
-        window.remove = remove;
-        window.onValue = onValue;
     </script>
 </body>
 </html>
